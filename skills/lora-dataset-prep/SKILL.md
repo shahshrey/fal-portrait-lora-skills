@@ -84,6 +84,11 @@ Produces:
 The detector proposes crops; it does not decide whether an image is usable.
 Do not discard an image solely because detection fails or its face is distant.
 
+Crops target roughly 4.2× the detected face, but never shrink below 1024 native
+pixels, so a distant face stays as tight as the source allows without being
+upscaled past 1:1. A face that still looks small after cropping means the source
+was low resolution, not that the crop misfired.
+
 ### 4. Visual QA and correction (required)
 
 First generate advisory flags:
@@ -135,8 +140,31 @@ Prefer descriptive per-image captions over a single shared caption.
   --trigger "ohwx man" \
   --pattern "subject_*.jpg" \
   --caption-mode placeholder \
+  --gender male \
   --workers 8
 ```
+
+Set `--gender` to match the subject. Florence-2 writes gendered nouns and
+pronouns; the polisher rewrites them to one consistent set so the trigger
+carries the identity instead of a description.
+
+Read the printed samples. If the polish left artifacts, edit the regex rules
+and re-derive captions from the saved raw text instead of paying for the API
+again:
+
+```bash
+.venv/bin/python "$SKILL_DIR/scripts/recaption_dataset.py" \
+  --images "./prepared_dataset/images" \
+  --zip "./prepared_dataset/dataset.zip" \
+  --trigger "ohwx man" \
+  --pattern "subject_*.jpg" \
+  --gender male \
+  --reuse-report
+```
+
+`--reuse-report` re-polishes every entry in `captions.json`, rewrites the
+`.txt` files, and rebuilds the ZIP. It drops entries whose image no longer
+exists, so it stays correct after deletions.
 
 Caption rules: [references/caption-rules.md](references/caption-rules.md).
 

@@ -29,7 +29,9 @@ def crop_box(image: Image.Image, face: dict | None):
         return (left, top, left + side, top + side), "center_fallback"
 
     face_side = max(face["w"], face["h"])
-    wanted = max(face_side * 4.2, min(w, h) * 0.42)
+    # Floor the crop at native TARGET so distant faces stay as tight as possible
+    # without upscaling past 1:1.
+    wanted = max(face_side * 4.2, min(min(w, h), TARGET))
     side = int(min(wanted, min(w, h)))
     cx = face["x"] + face["w"] / 2
     cy = face["y"] + face["h"] * 0.50

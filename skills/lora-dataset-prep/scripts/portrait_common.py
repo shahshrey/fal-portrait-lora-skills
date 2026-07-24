@@ -35,14 +35,19 @@ def detect_primary_face(
 
     cx0, cy0 = w / 2, h / 2
 
+    # YuNet rows are [x, y, w, h, 10 landmark coords, score]; the score is last.
+    def unpack(face):
+        x, y, fw, fh = map(float, face[:4])
+        return x, y, fw, fh, float(face[-1])
+
     def rank(face):
-        x, y, fw, fh, confidence = map(float, face[:5])
+        x, y, fw, fh, confidence = unpack(face)
         cx, cy = x + fw / 2, y + fh / 2
         distance = np.hypot((cx - cx0) / w, (cy - cy0) / h)
         area = (fw * fh) / (w * h)
         return confidence * np.sqrt(area) / (0.12 + distance)
 
-    x, y, fw, fh, confidence = map(float, max(faces, key=rank)[:5])
+    x, y, fw, fh, confidence = unpack(max(faces, key=rank))
     return {
         "x": x,
         "y": y,
