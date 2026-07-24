@@ -18,14 +18,23 @@ MODEL = "fal-ai/florence-2-large/more-detailed-caption"
 
 FLUFF = [
     r"\s*The overall mood of the image is[^.]*\.?",
-    r"\s*He looks happy and relaxed\.?",
-    r"\s*his eyes are bright and full of life\.?",
-    r"\s*He seems to be engaged in a conversation with someone on the laptop\.?",
-    r"\s*He appears to be in his late twenties or early thirties(?: and)?[^.]*\.?",
-    r"\s*he appears to be in his late twenties or early thirties(?: and)?[^.]*\.?",
-    r"\s*He appears to have a slight smile on his lips\.?",
-    r"\s*highlighting his features\.?",
+    r"\s*(?:He|She) looks happy and relaxed\.?",
+    r"\s*(?:his|her) eyes are bright and full of life\.?",
+    r"\s*(?:He|She) seems to be engaged in a conversation with someone"
+    r" on the laptop\.?",
+    r"\s*(?:He|She) appears to be in (?:his|her) late twenties or early"
+    r" thirties(?: and)?[^.]*\.?",
+    r"\s*(?:He|She) appears to have a slight smile on (?:his|her) lips\.?",
+    r"\s*highlighting (?:his|her) features\.?",
 ]
+
+# Florence-2 describes the subject with gendered nouns and pronouns; collapse
+# them to one consistent set so the trigger carries the identity instead.
+PRONOUNS = {
+    "male": {"subject": "he", "object": "him", "possessive": "his"},
+    "female": {"subject": "she", "object": "her", "possessive": "her"},
+}
+SUBJECT_NOUNS = r"man|woman|girl|guy|lady|gentleman|female|male"
 
 
 def ensure_fal_key(env_file: Path | None = None):
@@ -39,7 +48,9 @@ def ensure_fal_key(env_file: Path | None = None):
         raise SystemExit("Missing FAL_KEY or FAL_API_KEY for captioning")
 
 
-def polish_caption(raw: str, trigger: str) -> str:
+def polish_caption(raw: str, trigger: str, gender: str = "female") -> str:
+    pron = PRONOUNS[gender]
+    subj, obj, poss = pron["subject"], pron["object"], pron["possessive"]
     text = re.sub(r"\s+", " ", raw.strip())
     text = re.sub(r"^The image is (a |an )?", "", text, flags=re.I)
     text = re.sub(r"^This (image )?shows ", "", text, flags=re.I)
@@ -56,11 +67,11 @@ def polish_caption(raw: str, trigger: str) -> str:
     for pat in FLUFF:
         text = re.sub(pat, " ", text, flags=re.I)
 
-    text = re.sub(r"\bthe man's\b", "his", text, flags=re.I)
-    text = re.sub(r"\ba man's\b", "his", text, flags=re.I)
+    text = re.sub(rf"\b(?:the|a)\s+(?:{SUBJECT_NOUNS})'s\b", poss, text, flags=re.I)
     text = re.sub(
-        r"\b(?:a|the)\s+(?:young\s+)?(?:handsome\s+|smiling\s+)?"
-        r"(?:south\s+asian\s+|asian\s+)?man\b",
+        r"\b(?:a|the)\s+(?:young\s+)?(?:beautiful\s+|pretty\s+|handsome\s+"
+        r"|smiling\s+)?(?:south\s+asian\s+|asian\s+|indian\s+)?"
+        rf"(?:{SUBJECT_NOUNS})\b",
         "SUBJECT",
         text,
         flags=re.I,
@@ -70,13 +81,20 @@ def polish_caption(raw: str, trigger: str) -> str:
     text = re.sub(r"\bselfie of SUBJECT\b", "", text, flags=re.I)
     text = re.sub(r"\bphoto of SUBJECT\b", "", text, flags=re.I)
     text = re.sub(r"\bclose-up of SUBJECT(?:'s)? face\b", "close-up", text, flags=re.I)
-    text = re.sub(r"\bSUBJECT's face\b", "his face", text, flags=re.I)
-    text = re.sub(r"\bSUBJECT's\b", "his", text, flags=re.I)
-    text = re.sub(r"\bSUBJECT\b", "he", text)
-    text = re.sub(r"\bportrait of he\b", "", text, flags=re.I)
-    text = re.sub(r"\bselfie of he\b", "", text, flags=re.I)
-    text = re.sub(r"\bclose-up of he(?:'s)? face\b", "close-up", text, flags=re.I)
-    text = re.sub(r"\bhe's\b", "his", text, flags=re.I)
+    text = re.sub(r"\bSUBJECT's face\b", f"{poss} face", text, flags=re.I)
+    text = re.sub(r"\bSUBJECT's\b", poss, text, flags=re.I)
+    text = re.sub(r"\bSUBJECT\b", subj, text)
+    text = re.sub(rf"\bportrait of {subj}\b", "", text, flags=re.I)
+    text = re.sub(rf"\bselfie of {subj}\b", "", text, flags=re.I)
+    text = re.sub(
+        rf"\bclose-up of {subj}(?:'s)? face\b", "close-up", text, flags=re.I
+    )
+    text = re.sub(
+        rf"\b{subj}'s (face|hair|eyes|lips|head)\b",
+        rf"{poss} \1",
+        text,
+        flags=re.I,
+    )
 
     shot = "portrait"
     if re.search(r"\bselfie\b", raw, re.I):
@@ -94,15 +112,39 @@ def polish_caption(raw: str, trigger: str) -> str:
     caption = re.sub(r"\s+", " ", caption).strip()
     caption = re.sub(r"\bclose-up\s+\.", "close-up portrait.", caption)
     caption = re.sub(
+        r"\bclose-up\s+(?=with|in|wearing)",
+        "close-up portrait, ",
+        caption,
+        flags=re.I,
+    )
+    caption = re.sub(
         r"\bclose-up\s+'s face", "close-up portrait", caption
     )
     caption = re.sub(
-        r"\b(close-up )?portrait of his face",
+        rf"\b(close-up )?portrait of {poss} face",
         "close-up portrait",
         caption,
         flags=re.I,
     )
-    caption = re.sub(r"\bof he\b", "of him", caption, flags=re.I)
+    caption = re.sub(rf"\bof {subj}\b", f"of {obj}", caption, flags=re.I)
+    caption = re.sub(
+        rf"^({re.escape(trigger)}),\s*{subj}\s+is\s+", r"\1, ", caption, flags=re.I
+    )
+    # Collapse the captioner's stutters, e.g. "a strapless brown strapless dress".
+    caption = re.sub(r"\b(\w+)\s+(\w+\s+)?\1\b", r"\1 \2", caption, flags=re.I)
+    # Florence-2 truncates mid-clause; drop the dangling connective it leaves.
+    for _ in range(4):
+        trimmed = re.sub(
+            r"[,;]?\s+\b(?:and|but|or|with|while|as|that|which|is|are|was|the|a|an"
+            r"|of|in|on|at|to|for)\s*\.?\s*$",
+            ".",
+            caption,
+            flags=re.I,
+        )
+        if trimmed == caption:
+            break
+        caption = trimmed
+    caption = re.sub(r"\s+", " ", caption).strip()
     if not caption.endswith("."):
         caption += "."
     caption = caption.replace("..", ".")
@@ -132,7 +174,9 @@ def apply_caption_mode(
     )
 
 
-def caption_one(path: Path, trigger: str, caption_mode: str) -> dict:
+def caption_one(
+    path: Path, trigger: str, caption_mode: str, gender: str
+) -> dict:
     import fal_client
 
     url = fal_client.upload_file(str(path))
@@ -140,9 +184,38 @@ def caption_one(path: Path, trigger: str, caption_mode: str) -> dict:
     raw = result.get("results") or result.get("caption") or str(result)
     if isinstance(raw, dict):
         raw = raw.get("caption") or json.dumps(raw)
-    polished = polish_caption(str(raw), trigger)
+    polished = polish_caption(str(raw), trigger, gender)
     polished = apply_caption_mode(polished, trigger, caption_mode)
     return {"file": path.name, "raw": str(raw), "caption": polished, "url": url}
+
+
+def write_results(images_dir: Path, results: list[dict], zip_path: Path) -> Path:
+    results.sort(key=lambda x: x["file"])
+    for item in results:
+        txt = images_dir / f"{Path(item['file']).stem}.txt"
+        txt.write_text(item["caption"] + "\n", encoding="utf-8")
+    report = images_dir.parent / "captions.json"
+    report.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    zip_flat_dataset(images_dir, zip_path)
+    return report
+
+
+def rewrite_from_report(args) -> None:
+    """Re-derive captions from stored raw text, skipping the captioning API."""
+    report = args.images.parent / "captions.json"
+    results = json.loads(report.read_text(encoding="utf-8"))
+    live = {p.name for p in args.images.glob(args.pattern)}
+    results = [item for item in results if item["file"] in live]
+    for item in results:
+        polished = polish_caption(item["raw"], args.trigger, args.gender)
+        item["caption"] = apply_caption_mode(
+            polished, args.trigger, args.caption_mode
+        )
+    write_results(args.images, results, args.zip)
+    print(f"Re-polished {len(results)} captions from {report}")
+    print(f"Updated zip {args.zip} ({args.zip.stat().st_size / 1e6:.1f} MB)")
+    for item in results[:5]:
+        print(f"- {item['file']}: {item['caption']}")
 
 
 def main():
@@ -157,9 +230,24 @@ def main():
         default="placeholder",
         help="Use [trigger] for portrait trainer or the literal trigger text",
     )
+    ap.add_argument(
+        "--gender",
+        choices=tuple(PRONOUNS),
+        default="female",
+        help="Pronoun set used to normalize the captioner's gendered wording",
+    )
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--env", type=Path, default=None, help="Optional .env path")
+    ap.add_argument(
+        "--reuse-report",
+        action="store_true",
+        help="Re-polish raw captions from captions.json instead of calling fal",
+    )
     args = ap.parse_args()
+
+    if args.reuse_report:
+        rewrite_from_report(args)
+        return
 
     ensure_fal_key(args.env)
     images = sorted(args.images.glob(args.pattern))
@@ -173,7 +261,9 @@ def main():
     failures = []
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
         futs = {
-            ex.submit(caption_one, p, args.trigger, args.caption_mode): p
+            ex.submit(
+                caption_one, p, args.trigger, args.caption_mode, args.gender
+            ): p
             for p in images
         }
         for i, fut in enumerate(as_completed(futs), 1):
@@ -191,14 +281,7 @@ def main():
             "no dataset files were modified."
         )
 
-    results.sort(key=lambda x: x["file"])
-    for item in results:
-        txt = args.images / f"{Path(item['file']).stem}.txt"
-        txt.write_text(item["caption"] + "\n", encoding="utf-8")
-    report = args.images.parent / "captions.json"
-    report.write_text(json.dumps(results, indent=2), encoding="utf-8")
-
-    zip_flat_dataset(args.images, args.zip)
+    report = write_results(args.images, results, args.zip)
 
     print(f"\nWrote {report}")
     print(f"Updated zip {args.zip} ({args.zip.stat().st_size / 1e6:.1f} MB)")

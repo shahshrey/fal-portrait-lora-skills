@@ -6,6 +6,7 @@
 
 - [ ] `lora-dataset-prep`
 - [ ] `fal-lora-training`
+- [ ] `fal-lora-inference`
 - [ ] Repo docs / CI only
 
 ## Checklist

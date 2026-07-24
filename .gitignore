@@ -16,9 +16,10 @@ Thumbs.db
 .vscode/
 *.swp
 
-# Local datasets / training artifacts (never commit)
+# Local datasets / training / generation artifacts (never commit)
 prepared_dataset/
 portrait_training*/
+lora_generations*/
 *.zip
 *.safetensors
 models/*.onnx
