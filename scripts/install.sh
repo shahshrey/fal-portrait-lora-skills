@@ -14,10 +14,14 @@ else
 fi
 
 mkdir -p "$DEST"
-for skill in lora-dataset-prep fal-lora-training; do
+names=()
+for dir in "${ROOT}"/skills/*/; do
+  skill="$(basename "$dir")"
   rm -rf "${DEST}/${skill}"
-  cp -R "${ROOT}/skills/${skill}" "${DEST}/${skill}"
+  cp -R "$dir" "${DEST}/${skill}"
+  rm -rf "${DEST}/${skill}/scripts/__pycache__"
+  names+=("/${skill}")
   echo "Installed ${skill} -> ${DEST}/${skill}"
 done
 
-echo "Done. Restart Agent chat or invoke /lora-dataset-prep and /fal-lora-training."
+echo "Done. Restart Agent chat or invoke ${names[*]}."

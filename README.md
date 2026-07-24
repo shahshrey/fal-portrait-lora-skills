@@ -1,11 +1,12 @@
 # fal Portrait LoRA Skills
 
-Open-source [Cursor Agent Skills](https://cursor.com/docs) for preparing portrait LoRA datasets and training them with [`fal-ai/flux-lora-portrait-trainer`](https://fal.ai).
+Open-source [Cursor Agent Skills](https://cursor.com/docs) covering the whole portrait LoRA loop: prepare a dataset, train it with [`fal-ai/flux-lora-portrait-trainer`](https://fal.ai), then generate and evaluate images with [`fal-ai/flux-lora`](https://fal.ai/models/fal-ai/flux-lora/api).
 
 | Skill | What it does |
 |---|---|
 | [`lora-dataset-prep`](skills/lora-dataset-prep/) | Face-centered 1024×1024 crops, contact-sheet visual QA, Florence-2 captions, flat ZIP packing |
 | [`fal-lora-training`](skills/fal-lora-training/) | Validate ZIP → upload → submit → monitor → persist LoRA weights |
+| [`fal-lora-inference`](skills/fal-lora-inference/) | Generate from trained weights, sweep LoRA scale, download images, contact sheet for review |
 
 These skills teach an agent the workflow end-to-end, and ship the Python helpers the agent runs.
 
@@ -19,16 +20,14 @@ These skills teach an agent the workflow end-to-end, and ship the Python helpers
 ```bash
 # Personal (all projects)
 mkdir -p ~/.cursor/skills
-cp -R skills/lora-dataset-prep ~/.cursor/skills/
-cp -R skills/fal-lora-training ~/.cursor/skills/
+cp -R skills/* ~/.cursor/skills/
 
 # Or project-local
 mkdir -p .cursor/skills
-cp -R skills/lora-dataset-prep .cursor/skills/
-cp -R skills/fal-lora-training .cursor/skills/
+cp -R skills/* .cursor/skills/
 ```
 
-3. In Agent chat, invoke with `/lora-dataset-prep` or `/fal-lora-training`, or just ask to prepare/train a portrait LoRA — the agent should pick them up from the skill descriptions.
+3. In Agent chat, invoke with `/lora-dataset-prep`, `/fal-lora-training`, or `/fal-lora-inference` — or just ask to prepare, train, or test a portrait LoRA, and the agent should pick them up from the skill descriptions.
 
 ### One-liner helper
 
@@ -60,9 +59,22 @@ bash ~/.cursor/skills/lora-dataset-prep/scripts/setup_env.sh
   --output-dir "./portrait_training_run" \
   --env ".env" \
   --yes
+
+# 5) Test the LoRA across scales (paid fal job) and review the contact sheet
+.venv/bin/python ~/.cursor/skills/fal-lora-inference/scripts/generate_lora_images.py \
+  --lora "./portrait_training_run/subject_lora.safetensors" \
+  --trigger-phrase "ohwx man" \
+  --prompt "ohwx man, close-up portrait, soft window light, navy blazer" \
+  --lora-scale 0.7 0.9 1.1 1.3 \
+  --seed 12345 \
+  --output-dir "./lora_generations" \
+  --env ".env" \
+  --yes
 ```
 
-Auth for captioning/training: set `FAL_KEY` or `FAL_API_KEY` in a local `.env` (never commit it).
+The trigger phrase must appear in every prompt — it is what carries the identity. A prompt without it renders a generic person even with the LoRA loaded.
+
+Auth for captioning, training, and inference: set `FAL_KEY` or `FAL_API_KEY` in a local `.env` (never commit it).
 
 ## Repository layout
 
@@ -70,8 +82,10 @@ Auth for captioning/training: set `FAL_KEY` or `FAL_API_KEY` in a local `.env` (
 skills/
   lora-dataset-prep/     # dataset prep skill + scripts
   fal-lora-training/     # fal training skill + scripts
+  fal-lora-inference/    # generation + evaluation skill + scripts
 scripts/
   install.sh             # copy skills into Cursor
+  check.sh               # smoke checks (same script CI runs)
 .github/                 # issue/PR templates, CI, CODEOWNERS
 ```
 
