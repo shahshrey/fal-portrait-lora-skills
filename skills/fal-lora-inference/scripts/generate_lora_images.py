@@ -12,8 +12,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 DEFAULT_ENDPOINT = "fal-ai/flux-lora"
 NAMED_SIZES = (
     "square_hd",
@@ -112,6 +110,10 @@ def parse_args():
 
 
 def load_credentials(env_file: Path | None):
+    # Imported lazily, like fal_client below, so the module stays importable
+    # for the dependency-free smoke checks in scripts/check.sh.
+    from dotenv import load_dotenv
+
     if env_file:
         load_dotenv(env_file)
     else:
